@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-amber-50/40 text-slate-900 font-sans antialiased selection:bg-emerald-200 selection:text-emerald-900;
+  }
+}
+
+/* Accessible High Contrast Mode Override */
+.high-contrast-mode {
+  background-color: #000000 !important;
+  color: #ffea00 !important;
+}
+
+.high-contrast-mode button {
+  border-color: #ffea00 !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
