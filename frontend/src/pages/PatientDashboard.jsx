@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
+import { dbService } from '../services/dbService';
 import { subscribeToStorage } from '../services/storageService';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { VoiceAssistantModal } from '../components/VoiceAssistantModal';
 import { FaceDetectorModal } from '../components/FaceDetectorModal';
+import { FaceRegistrationModal } from '../components/FaceRegistrationModal';
 import { EmergencyModal } from '../components/EmergencyModal';
 import {
   CheckCircle,
@@ -21,7 +23,8 @@ import {
   Sun,
   Brain,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus
 } from 'lucide-react';
 
 export const PatientDashboard = () => {
@@ -37,6 +40,7 @@ export const PatientDashboard = () => {
   // Modal controls
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isFaceOpen, setIsFaceOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
 
   useEffect(() => {
@@ -60,7 +64,11 @@ export const PatientDashboard = () => {
       const meds = await api.getMedications();
       const rts = await api.getRoutines();
       const msgs = await api.getCaregiverMessages();
-      const pm = await api.getPeopleMet();
+      
+      // Load encounters from IndexedDB & api
+      const dbEncounters = await dbService.getEncounterLogs();
+      const apiEncounters = await api.getPeopleMet();
+      const mergedMet = dbEncounters.length > 0 ? dbEncounters : apiEncounters;
 
       setProfile(prof || {
         fullName: 'Sanjay Singhania',
@@ -76,7 +84,7 @@ export const PatientDashboard = () => {
       setMedications(Array.isArray(meds) ? meds : []);
       setRoutines(Array.isArray(rts) ? rts : []);
       setMessages(Array.isArray(msgs) ? msgs : []);
-      setPeopleMet(Array.isArray(pm) ? pm : []);
+      setPeopleMet(Array.isArray(mergedMet) ? mergedMet : []);
     } catch (err) {
       console.error('Error loading patient dashboard data:', err);
       // Fallback defaults so app never crashes
@@ -203,44 +211,61 @@ export const PatientDashboard = () => {
         )}
       </section>
 
-      {/* 5 & 6. QUICK ASSISTANCE BUTTONS: VOICE & FACIAL SCANNER */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* 5, 6 & 7. QUICK ASSISTANCE BUTTONS: VOICE & FACIAL RECOGNITION (REMEMBER ME + SCANNER) */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
           onClick={() => setIsVoiceOpen(true)}
-          className="p-6 rounded-3xl bg-amber-100 hover:bg-amber-200 text-amber-950 border-2 border-amber-300 shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-5 text-left group"
+          className="p-5 rounded-3xl bg-amber-100 hover:bg-amber-200 text-amber-950 border-2 border-amber-300 shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-4 text-left group"
         >
-          <div className="w-16 h-16 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-3xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-3xl shadow-md group-hover:scale-110 transition-transform shrink-0">
             🎤
           </div>
           <div>
-            <h3 className={`font-black ${getTextSizeClass('text-xl')} text-amber-950`}>
+            <h3 className={`font-black ${getTextSizeClass('text-lg')} text-amber-950`}>
               TALK TO MEMORY BRIDGE
             </h3>
-            <p className="text-xs font-bold text-amber-800 mt-1">
+            <p className="text-xs font-bold text-amber-800 mt-0.5">
               Ask questions aloud: "Who is Roohi?", "When is my medicine?"
             </p>
           </div>
         </button>
 
         <button
-          onClick={() => setIsFaceOpen(true)}
-          className="p-6 rounded-3xl bg-blue-100 hover:bg-blue-200 text-blue-950 border-2 border-blue-300 shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-5 text-left group"
+          onClick={() => setIsRegisterOpen(true)}
+          className="p-5 rounded-3xl bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border-2 border-emerald-400 shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-4 text-left group"
         >
-          <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-3xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-3xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+            👤
+          </div>
+          <div>
+            <h3 className={`font-black ${getTextSizeClass('text-lg')} text-emerald-950`}>
+              REMEMBER ME (REGISTER)
+            </h3>
+            <p className="text-xs font-bold text-emerald-800 mt-0.5">
+              First-time face capture stored in IndexedDB for future auto-matching
+            </p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setIsFaceOpen(true)}
+          className="p-5 rounded-3xl bg-blue-100 hover:bg-blue-200 text-blue-950 border-2 border-blue-300 shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-4 text-left group"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-3xl shadow-md group-hover:scale-110 transition-transform shrink-0">
             📷
           </div>
           <div>
-            <h3 className={`font-black ${getTextSizeClass('text-xl')} text-blue-950`}>
-              WHO AM I LOOKING AT?
+            <h3 className={`font-black ${getTextSizeClass('text-lg')} text-blue-950`}>
+              WHO AM I WITH? (RECOGNIZE)
             </h3>
-            <p className="text-xs font-bold text-blue-800 mt-1">
-              Scan face with camera to recognize family & visitors instantly
+            <p className="text-xs font-bold text-blue-800 mt-0.5">
+              Scan face with camera to match against registered profiles
             </p>
           </div>
         </button>
       </section>
 
-      {/* 7 & 8. MEMORIES & MIND & MEMORY NAVIGATION CARDS */}
+      {/* 8. MEMORIES & MIND & MEMORY NAVIGATION CARDS */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
           to="/patient/memories"
@@ -294,7 +319,7 @@ export const PatientDashboard = () => {
               PEOPLE MET TODAY
             </h2>
           </div>
-          <span className="text-xs font-bold text-slate-500">Encounter Log</span>
+          <span className="text-xs font-bold text-slate-500">IndexedDB Encounter Log</span>
         </div>
 
         {safePeopleMet.length === 0 ? (
@@ -459,8 +484,10 @@ export const PatientDashboard = () => {
 
       {/* MODALS */}
       <VoiceAssistantModal isOpen={isVoiceOpen} onClose={() => setIsVoiceOpen(false)} />
+      <FaceRegistrationModal isOpen={isRegisterOpen} onClose={() => setIsRegisterOpen(false)} onPersonRegistered={() => loadDashboardData()} />
       <FaceDetectorModal isOpen={isFaceOpen} onClose={() => setIsFaceOpen(false)} onPersonDetected={() => loadDashboardData()} />
       <EmergencyModal isOpen={isEmergencyOpen} onClose={() => setIsEmergencyOpen(false)} />
     </div>
   );
 };
+

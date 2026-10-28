@@ -390,8 +390,39 @@ export const api = {
     return newMsg;
   },
 
+  // AI Assistant Query Endpoint (Backend AI + Local Fallback)
+  queryAIAssistant: async (queryText, conversationHistory = []) => {
+    try {
+      const clientSyncData = storageService.getData();
+      const response = await fetch('http://localhost:5000/api/ai/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: queryText,
+          conversationHistory,
+          clientSyncData
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+      throw new Error(`AI HTTP ${response.status}`);
+    } catch (err) {
+      console.warn('Backend AI service unreachable, running local rule engine fallback:', err.message);
+      const { voiceEngine } = await import('./voiceService');
+      const localRes = voiceEngine.processQuery(queryText);
+      return {
+        answer: localRes.answer,
+        intent: localRes.intent,
+        fallbackUsed: true
+      };
+    }
+  },
+
   // Full Demo Data Reset
   resetDemoData: async () => {
-    return storageService.resetDemoData();
+    return await storageService.resetDemoData();
   }
 };

@@ -2,6 +2,8 @@
 // Single Key: memory_bridge_data
 // No External Database Dependency
 
+import { dbService } from './dbService';
+
 const STORAGE_KEY = 'memory_bridge_data';
 
 export const initialDemoData = {
@@ -115,32 +117,7 @@ export const initialDemoData = {
       photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80'
     }
   ],
-  peopleMet: [
-    {
-      id: 'pml_1',
-      detectedName: 'Roohi',
-      relationship: 'Daughter',
-      status: 'known',
-      timestamp: new Date(Date.now() - 7200000).toISOString(),
-      photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'pml_2',
-      detectedName: 'Unknown Person',
-      relationship: 'Unknown Visitor',
-      status: 'unknown',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'pml_3',
-      detectedName: 'Meera Sharma',
-      relationship: 'Caregiver',
-      status: 'known',
-      timestamp: new Date().toISOString(),
-      photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80'
-    }
-  ],
+  peopleMet: [],
   medications: [
     {
       id: 'med_1',
@@ -299,13 +276,24 @@ export const storageService = {
     return nextSection;
   },
 
-  resetDemoData: () => {
+  resetDemoData: async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDemoData));
-      notifyListeners(initialDemoData);
+      // 1. Wipe all persistent IndexedDB tables (registered faces & encounters)
+      await dbService.resetAllPersistentData();
+
+      // 2. Prepare clean demo data payload
+      const cleanDemo = {
+        ...initialDemoData,
+        peopleMet: []
+      };
+
+      // 3. Clear and save clean initial demo state in localStorage
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanDemo));
+      notifyListeners(cleanDemo);
+      return cleanDemo;
     } catch (e) {
       console.error('Error resetting demo data:', e);
+      return initialDemoData;
     }
-    return initialDemoData;
   }
 };

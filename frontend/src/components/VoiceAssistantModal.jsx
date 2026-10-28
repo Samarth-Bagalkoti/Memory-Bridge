@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { voiceEngine } from '../services/voiceService';
+import { api } from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { Mic, MicOff, Volume2, X, Send, AlertCircle, Play, Square, Sparkles, CheckCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, X, Send, AlertCircle, Play, Square, Sparkles, CheckCircle, Brain } from 'lucide-react';
 
 export const VoiceAssistantModal = ({ isOpen, onClose }) => {
   const { speak, stopSpeaking, getTextSizeClass, highContrast } = useAccessibility();
@@ -10,7 +11,8 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
   const [response, setResponse] = useState(null);
   const [manualQuery, setManualQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [voiceStatus, setVoiceStatus] = useState('Ready'); // 'Ready', 'Listening…', 'Processing…', 'Speaking…', 'Voice unavailable — use text input'
+  const [voiceStatus, setVoiceStatus] = useState('Ready'); // 'Ready', 'Listening…', 'Thinking…', 'Speaking…', 'Voice unavailable — use text input'
+  const [conversationHistory, setConversationHistory] = useState([]);
 
   const handleStopListening = () => {
     voiceEngine.stopListening();
@@ -45,25 +47,45 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
     });
   };
 
-  // Unified intent processor for Spoken input, Typed input, and Preset buttons
-  const handleProcessQuery = (queryText) => {
+  // Unified Natural Language AI Assistant Processor
+  const handleProcessQuery = async (queryText) => {
     if (!queryText || queryText.includes('Listening…')) return;
     
-    setVoiceStatus('Processing…');
-    const res = voiceEngine.processQuery(queryText);
-    setResponse(res);
+    setVoiceStatus('Thinking…');
 
-    setVoiceStatus('Speaking…');
-    speak(res.answer);
+    try {
+      // 1. Call AI Assistant Endpoint (Backend AI model with ground-truth data tools)
+      const res = await api.queryAIAssistant(queryText, conversationHistory);
+      
+      setResponse(res);
 
-    // After speaking starts, transition back to listening or ready after delay
-    setTimeout(() => {
-      if (isListening) {
-        setVoiceStatus('Listening…');
-      } else {
-        setVoiceStatus('Ready');
-      }
-    }, 2500);
+      // 2. Update conversation context history for multi-turn follow-up questions
+      const updatedHistory = [
+        ...conversationHistory,
+        { role: 'user', content: queryText },
+        { role: 'assistant', content: res.answer }
+      ].slice(-6); // Keep last 3 turns
+      setConversationHistory(updatedHistory);
+
+      // 3. Read final answer aloud using browser SpeechSynthesis
+      setVoiceStatus('Speaking…');
+      speak(res.answer);
+
+      // 4. Return to Listening or Ready state
+      setTimeout(() => {
+        if (isListening) {
+          setVoiceStatus('Listening…');
+        } else {
+          setVoiceStatus('Ready');
+        }
+      }, 3000);
+    } catch (err) {
+      console.warn('Error querying AI Assistant, executing local intent fallback:', err);
+      const localRes = voiceEngine.processQuery(queryText);
+      setResponse(localRes);
+      setVoiceStatus('Speaking…');
+      speak(localRes.answer);
+    }
   };
 
   const handlePresetQuery = (query) => {
@@ -88,8 +110,9 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
       setTranscript('');
       setErrorMessage('');
       setVoiceStatus('Ready');
+      setConversationHistory([]);
       setResponse({
-        answer: 'Hello Sanjay! Click START LISTENING or type your question below to speak with Memory Bridge.',
+        answer: 'Hello Sanjay! I am your AI Memory Bridge companion. Ask me any question aloud or type below.',
         intent: 'greeting'
       });
       speak('Hello Sanjay! I am ready to help you. What would you like to know today?');
@@ -111,17 +134,17 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
             <span>Listening…</span>
           </span>
         );
-      case 'Processing…':
+      case 'Thinking…':
         return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-600 animate-spin" />
-            <span>Processing…</span>
+          <span className="px-3.5 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1.5 shadow-sm">
+            <Brain className="w-3.5 h-3.5 text-purple-600 animate-spin" />
+            <span>Thinking… (Querying AI & Patient Data)</span>
           </span>
         );
       case 'Speaking…':
         return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1.5">
-            <Volume2 className="w-3.5 h-3.5 text-purple-600 animate-bounce" />
+          <span className="px-3.5 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1.5">
+            <Volume2 className="w-3.5 h-3.5 text-blue-600 animate-bounce" />
             <span>Speaking…</span>
           </span>
         );
@@ -142,14 +165,14 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const supportedQuestions = [
-    "Who is Roohi?",
-    "Who is Vansh?",
-    "Who is Kalpana?",
-    "When is my medicine?",
-    "What do I have today?",
-    "Who is my caregiver?",
-    "Who did I meet today?",
+  const sampleNaturalQuestions = [
+    "What should I do now?",
+    "I forgot my medicine. When do I take it?",
+    "Who did I meet this morning?",
+    "Tell me about Roohi.",
+    "Who is my wife?",
+    "Do I have an appointment today?",
+    "What memories do I have about my family?",
     "What is my next task?"
   ];
 
@@ -162,16 +185,16 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl shadow-inner shrink-0">
-              🎤
+              🧠
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className={`font-bold ${getTextSizeClass('text-2xl')} text-emerald-900`}>
-                  TALK TO MEMORY BRIDGE
+                  AI VOICE ASSISTANT
                 </h2>
                 {getStatusBadge()}
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Voice Companion & Offline Speech Assistant for Sanjay</p>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">Natural Language AI Companion for Sanjay Singhania</p>
             </div>
           </div>
           <button
@@ -182,24 +205,20 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Network Error / Permission Error Banner */}
+        {/* Network / Error Notice Banner */}
         {errorMessage && (
           <div className="mb-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs font-bold flex items-center gap-3 shadow-sm">
             <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
             <div>
-              <p className="font-extrabold text-sm text-amber-900">
-                {errorMessage === 'Voice recognition is temporarily unavailable.' 
-                  ? 'Voice recognition is temporarily unavailable.' 
-                  : errorMessage}
-              </p>
+              <p className="font-extrabold text-sm text-amber-900">{errorMessage}</p>
               <p className="text-[11px] text-amber-800 font-semibold mt-0.5">
-                You can type any question in the input box below or tap one of the preset questions!
+                You can type any free-form question in the box below!
               </p>
             </div>
           </div>
         )}
 
-        {/* Central Microphone Controls */}
+        {/* Central Microphone Controls (Extra Large for Elderly Users) */}
         <div className="flex flex-col items-center justify-center my-6 space-y-4">
           <div className="flex items-center justify-center gap-4">
             {!isListening ? (
@@ -208,7 +227,7 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
                 className="px-8 py-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xl shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border-2 border-emerald-400"
               >
                 <Mic className="w-8 h-8" />
-                <span>[ 🎤 Start Listening ]</span>
+                <span>[ 🎤 START LISTENING ]</span>
               </button>
             ) : (
               <button
@@ -216,36 +235,42 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
                 className="px-8 py-5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xl shadow-xl animate-pulse hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border-2 border-rose-400"
               >
                 <Square className="w-8 h-8" />
-                <span>[ ⏹ Stop Listening ]</span>
+                <span>[ ⏹ STOP LISTENING ]</span>
               </button>
             )}
           </div>
 
           {transcript && (
-            <p className="mt-2 text-center italic text-emerald-800 font-medium bg-emerald-50 px-4 py-2.5 rounded-xl border border-emerald-200 text-base max-w-lg">
+            <p className="mt-2 text-center italic text-emerald-950 font-bold bg-emerald-50 px-5 py-3 rounded-2xl border-2 border-emerald-200 text-lg max-w-lg shadow-inner">
               "{transcript}"
             </p>
           )}
         </div>
 
-        {/* Assistant Response Box */}
+        {/* Assistant Response Box (Large Readable Text) */}
         {response && (
-          <div className="my-6 p-5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-emerald-950 flex items-start gap-4 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-              <Volume2 className="w-6 h-6" />
+          <div className="my-6 p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-200 text-emerald-950 flex items-start gap-4 shadow-md">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 text-2xl shadow">
+              🧠
             </div>
             <div className="flex-1">
-              <p className={`font-bold ${getTextSizeClass('text-lg')} leading-relaxed`}>
-                {response.answer}
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-800">
+                  {response.fallbackUsed ? 'AI Companion Response (Offline Engine)' : 'AI Companion Response (Gemini 2.5 + Ground Truth)'}
+                </span>
+              </div>
+              <p className={`font-black ${getTextSizeClass('text-xl')} leading-relaxed text-emerald-950`}>
+                "{response.answer}"
               </p>
               <button
                 onClick={() => {
                   setVoiceStatus('Speaking…');
                   speak(response.answer);
                 }}
-                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
+                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors shadow"
               >
-                🔊 Read Aloud Again
+                <Volume2 className="w-4 h-4" />
+                <span>Read Aloud Again</span>
               </button>
             </div>
           </div>
@@ -257,32 +282,32 @@ export const VoiceAssistantModal = ({ isOpen, onClose }) => {
             type="text"
             value={manualQuery}
             onChange={(e) => setManualQuery(e.target.value)}
-            placeholder="Type your question here..."
-            className="flex-1 px-4 py-3.5 rounded-xl border-2 border-slate-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 bg-white"
+            placeholder="Type your question..."
+            className="flex-1 px-4 py-3.5 rounded-xl border-2 border-slate-300 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 bg-white"
           />
           <button
             type="submit"
-            className="px-6 py-3.5 rounded-xl bg-emerald-600 text-white font-extrabold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-md"
+            className="px-6 py-3.5 rounded-xl bg-emerald-600 text-white font-extrabold text-base hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-md"
           >
             <span>Ask</span>
             <Send className="w-4 h-4" />
           </button>
         </form>
 
-        {/* All 8 Supported Preset Questions */}
+        {/* Natural Language Sample Questions */}
         <div className="mt-6 pt-4 border-t border-slate-100">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-3">
-            Or tap any supported question below:
+          <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Ask natural questions like:
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {supportedQuestions.map((q, idx) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {sampleNaturalQuestions.map((q, idx) => (
               <button
                 key={idx}
                 onClick={() => handlePresetQuery(q)}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-950 border border-amber-200 hover:bg-amber-100 transition-all hover:scale-105 text-left truncate"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-950 border border-amber-200 hover:bg-amber-100 transition-all hover:scale-105 text-left truncate shadow-sm"
                 title={q}
               >
-                💬 {q}
+                💬 "{q}"
               </button>
             ))}
           </div>

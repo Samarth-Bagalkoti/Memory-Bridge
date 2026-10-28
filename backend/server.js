@@ -15,6 +15,7 @@ const gameRoutes = require('./routes/gameRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const locationRoutes = require('./routes/locationRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/games', gameRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/ai', aiRoutes);
 
 // MongoDB connection attempt (with smooth fallback to in-memory store)
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/memory_bridge';

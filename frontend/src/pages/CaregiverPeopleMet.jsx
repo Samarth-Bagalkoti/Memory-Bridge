@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { dbService } from '../services/dbService';
 import { subscribeToStorage } from '../services/storageService';
 import { Users, UserPlus, CheckCircle, Clock, X, Sparkles } from 'lucide-react';
 
@@ -23,15 +24,19 @@ export const CaregiverPeopleMet = () => {
   }, []);
 
   const loadLogs = async () => {
-    const data = await api.getPeopleMet();
-    setPeopleMet(data);
+    const dbLogs = await dbService.getEncounterLogs();
+    const apiLogs = await api.getPeopleMet();
+    setPeopleMet(dbLogs.length > 0 ? dbLogs : apiLogs);
   };
 
   const handleIdentifySubmit = async (e) => {
     e.preventDefault();
     if (!name || !relationship || !selectedUnknownLog) return;
 
+    // Convert unknown encounter to registered face profile in IndexedDB!
+    await dbService.convertUnknownToRegistered(selectedUnknownLog.id, name, relationship, notes);
     await api.identifyPerson(selectedUnknownLog.id, name, relationship, notes);
+
     setSelectedUnknownLog(null);
     setName('');
     setRelationship('');
